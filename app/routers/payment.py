@@ -1,60 +1,84 @@
-from fastapi import APIRouter,HTTPException
-from base64 import b64encode
-from sqlalchemy.orm import Session
-import requests
-from datetime import datetime
-import httpx
+from fastapi import APIRouter,status,Depends,HTTPException
 from app import schemas,models
-
+from sqlalchemy.orm import Session
+from app.auth import get_current_admin
+from app.database import get_db
+from app.daraja import stk_push_sender,get_access_token,process_stk_push_callback,check_transaction_status,format_phone_number
 
 router = APIRouter()
 
-consumer_key = 'cjFxSqo6QiLhEYPHAU8zAntSCtPeIUzvQ53JQKzYiocpOhnr'
-consumer_secret = 'yMNsUbahjfAZjVF1lcsgwWGHbVLjiE5xV96BJhMA8MOmvVvVeAqFzGYmzX0JtCua'
-pass_key = 'bfb279f9aa9bdbcf158e97dd71a467cd2e0c893059b10f78e6b72ada1ed2c919'
-saf_url = "https://sandbox.safaricom.co.ke/"
-short_code = '174379'
-callback_url = 'https://oneshop.co.ke/stk_callback'
 
-def format_phone_number(phone: str) -> str:
-    if phone.startswith("0"):
-        return "254" + phone[1:]
-    elif phone.startswith("+"):
-        return phone[1:]
-    return phone
-
-
-
-def get_access_token():
-   
+@router.post('/', response_model=schemas.STK_PushResponse)
+async def stk_push(transaction: schemas.STK_PushCreate, db: Session = Depends(get_db)):
     try:
-        if not consumer_key or not consumer_secret:
-            raise ValueError("CONSUMER_KEY or CONSUMER_SECRET not set")
+        token = get_access_token()
 
-        credentials = f"{consumer_key}:{consumer_secret}"
-        encoded_credentials = b64encode(credentials.encode()).decode()
-        print(f"Encoded Credentials: {encoded_credentials}") 
+        formatted_number = format_phone_number(transaction.phone_number)
 
-        headers = {
-            "Authorization": f"Basic {encoded_credentials}",
-            "Content-Type": "application/json"
-        }
+        # Use a dynamic or provided account reference
+        account_reference = f"ACC_{formatted_number[-4:]}_{transaction.amount}"
 
-        url = f"{saf_url}oauth/v1/generate?grant_type=client_credentials"
-        
-        response = requests.get(url, headers=headers, timeout=30)
+        response = await stk_push_sender(formatted_number, transaction.amount, token)
 
-        if response.status_code != 200:
-            print(f"Response body: {response.text}")  
-            raise Exception(f"Auth failed: {response.status_code} - {response.text}")
+        print("Received STK Push data:", response)
 
-        json_response = response.json()
-        
-        access_token = json_response.get("access_token")
-        if not access_token:
-            raise Exception(f"No access token found in the response: {json_response}")
-        return access_token
-    
+        if 'CheckoutRequestID' in response:
+            try:
+                # Save the STK push response to the DB
+                mpesa_tx = models.Payment(
+                    checkout_request_id=response["CheckoutRequestID"],
+                    merchant_request_id=response["MerchantRequestID"],
+                    phone_number=transaction.phone_number,
+                    amount=transaction.amount,
+                    account_reference=account_reference,  # ✅ Added here
+                    status=models.MPESAStatus.PENDING  
+                )
+                db.add(mpesa_tx)
+                db.commit()
+                db.refresh(mpesa_tx)
+
+                return {
+                    "checkout_request_id": response["CheckoutRequestID"],
+                    "merchant_request_id": response["MerchantRequestID"],
+                    "account_reference": account_reference,  # ✅ Include in response
+                    "status": "pending",
+                    "response_code": "0",
+                    "response_description": "Success. Request accepted for processing",
+                    "customer_message": "Please check your phone to complete the payment"
+                }
+
+            except Exception as e:
+                raise HTTPException(status_code=500, detail=f"Error adding STK push to db: {e}")
+        else:
+            raise HTTPException(status_code=400, detail="Invalid response from MPESA")
+
+    except ValueError as ve:
+        raise HTTPException(status_code=400, detail=str(ve))
     except Exception as e:
-        print(f"Error getting access token: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Failed to get access token: {str(e)}")
+        print(f"STK Push error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+
+@router.get("/checker", response_model=schemas.STKPushCheckResponse)
+async def check_stk_push_status(merchant_request_id: str,checkout_request_id: str,db: Session = Depends(get_db)):
+    transaction = check_transaction_status(merchant_request_id, checkout_request_id, db)
+    
+    if not transaction:
+        return {
+            "success": False,
+            "message": "Transaction not found",
+            "status": None
+        }
+    return {
+            "success": transaction.status == models.MPESAStatus.COMPLETED,
+           "message": f"Transaction {transaction.status}",
+        "status": transaction.status
+    }
+
+   
+@router.post("/callback")
+async def stk_push_callback(callback_data: schemas.MpesaCallback,db: Session = Depends(get_db)):
+    return await process_stk_push_callback(callback_data, db)
+
+

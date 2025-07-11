@@ -19,7 +19,7 @@ app.add_middleware(
 models.Base.metadata.create_all(bind=engine)
 
 app.include_router(users.router,prefix='/users',tags=['users'])
-app.include_router(payment.router,prefix='/users',tags=['payment'])
+app.include_router(payment.router,prefix='/payment',tags=['payment'])
 
 @app.get('/')
 def index():
