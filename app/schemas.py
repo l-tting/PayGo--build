@@ -38,3 +38,10 @@ class STKPushCheckResponse(BaseModel):
     success: bool
     message: str
     status: Optional[str] = None
+
+class UserReset(BaseModel):
+    old_password:str
+    new_password:str
+
+class ResetResponse(BaseModel):
+    message:str

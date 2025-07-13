@@ -1,11 +1,11 @@
-from fastapi import APIRouter,status,Depends,HTTPException,Response
+from fastapi import APIRouter,status,Depends,HTTPException,Response,Request
 from werkzeug.security import generate_password_hash,check_password_hash
-from app.schemas import UserCreate,UserLogin
+from app.schemas import UserCreate,UserLogin,UserReset,ResetResponse
 from sqlalchemy.orm import Session
 from fastapi.responses import JSONResponse
 from app.database import get_db
 from app.models import User
-from app.auth import create_access_token
+from app.auth import create_access_token,get_token_from_cookie,get_current_user
 from datetime import timedelta
 
 router = APIRouter()
@@ -56,6 +56,28 @@ def login_user(user_login: UserLogin, db: Session = Depends(get_db)):
         secure=False                
     )
     return response
+
+
+@router.get("/token")
+def get_user_token(request: Request):
+    token = get_token_from_cookie(request)
+    return {"access_token": token}
+
+
+@router.post('/pass_reset',status_code=status.HTTP_201_CREATED,response_model=ResetResponse)
+def reset_password(user_reset:UserReset,user:User=Depends(get_current_user),db:Session=Depends(get_db)):
+    existing_user = db.query(User).filter(User.email==user.email).first()
+    if not existing_user:
+        raise HTTPException(status_code=404,detail="User not found")
+    else:
+       
+        if check_password_hash(existing_user.password,user_reset.old_password):
+            new_password = generate_password_hash(user_reset.new_password)
+            existing_user.password = new_password
+            db.commit()
+            return{"message":"password reset successful"}
+        else:
+            raise HTTPException(status_code=500,detail="Passwords dont match")
 
 
 

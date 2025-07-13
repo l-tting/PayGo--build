@@ -1,7 +1,7 @@
 from fastapi import APIRouter,status,Depends,HTTPException
 from app import schemas,models
 from sqlalchemy.orm import Session
-from app.auth import get_current_admin
+from app.auth import get_current_user
 from app.database import get_db
 from app.daraja import stk_push_sender,get_access_token,process_stk_push_callback,check_transaction_status,format_phone_number
 

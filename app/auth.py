@@ -37,7 +37,7 @@ def get_token_from_cookie(request: Request) -> str:
     return token
 
 
-async def get_current_admin(access_token: str = Depends(get_token_from_cookie)):
+async def get_current_user(access_token: str = Depends(get_token_from_cookie)):
     try:
         payload = jwt.decode(access_token, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM])
         email = payload.get('user')
@@ -47,7 +47,7 @@ async def get_current_admin(access_token: str = Depends(get_token_from_cookie)):
         raise HTTPException(status_code=401, detail="Token has expired")
     except JWTError:
         raise HTTPException(status_code=401, detail="Invalid token")
-    admin = check_admin(email)
-    if not admin:
+    user = check_admin(email)
+    if not user:
         raise HTTPException(status_code=401, detail="User does not exist")
-    return admin
+    return user
