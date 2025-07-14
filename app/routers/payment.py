@@ -4,6 +4,8 @@ from sqlalchemy.orm import Session
 from app.auth import get_current_user
 from app.database import get_db
 from app.daraja import stk_push_sender,get_access_token,process_stk_push_callback,check_transaction_status,format_phone_number
+from uuid import uuid4
+
 
 router = APIRouter()
 
@@ -16,7 +18,7 @@ async def stk_push(transaction: schemas.STK_PushCreate, db: Session = Depends(ge
         formatted_number = format_phone_number(transaction.phone_number)
 
         # Use a dynamic or provided account reference
-        account_reference = f"ACC_{formatted_number[-4:]}_{transaction.amount}"
+        account_reference = f"ACC_{formatted_number[-4:]}_{transaction.amount}_{uuid4().hex[:6]}"
 
         response = await stk_push_sender(formatted_number, transaction.amount, token)
 
@@ -79,6 +81,8 @@ async def check_stk_push_status(merchant_request_id: str,checkout_request_id: st
    
 @router.post("/callback")
 async def stk_push_callback(callback_data: schemas.MpesaCallback,db: Session = Depends(get_db)):
+    print("📥 Received MPesa Callback:")
+    print(callback_data.dict())
     return await process_stk_push_callback(callback_data, db)
 
 

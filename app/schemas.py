@@ -17,8 +17,8 @@ class MpesaCallback(BaseModel):
     checkout_request_id: str
     result_code: str
     result_desc: str
-    mpesa_receipt_number: Optional[str] = None
-    transaction_date: Optional[datetime] = None
+    mpesa_receipt_number:str
+    transaction_date: str
 
 class STK_PushCreate(BaseModel):
     phone_number:str

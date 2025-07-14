@@ -8,6 +8,7 @@ from app import schemas,models
 from app.models import Payment
 import os
 from dotenv import load_dotenv
+import pytz
 
 
 router = APIRouter()
@@ -84,7 +85,7 @@ async def stk_push_sender(mobile:str, amount:float, access_token:str):
             "TransactionType": "CustomerPayBillOnline",
             "Amount": int(amount),
             "PartyA": str(mobile),
-            "PartyB": short_code,
+            "PartyB": str(short_code),
             "PhoneNumber": str(mobile),
             "CallBackURL": callback_url,
             "AccountReference": "myduka1",
@@ -141,13 +142,22 @@ async def process_stk_push_callback(callback_data: schemas.MpesaCallback, db: Se
                 "result_code": callback_data.result_code,
                 "result_desc": callback_data.result_desc
             }
+        nairobi = pytz.timezone("Africa/Nairobi")
+
+        if isinstance(callback_data.transaction_date, str):
+            parsed_date = datetime.strptime(callback_data.transaction_date, "%Y%m%d%H%M%S")
+        else:
+            parsed_date = callback_data.transaction_date
+
+
+        nairobi_time = nairobi.localize(parsed_date)
 
         # Handle successful payment
         transaction.status = models.MPESAStatus.COMPLETED
         transaction.response_code = callback_data.result_code
         transaction.response_description = callback_data.result_desc
         transaction.mpesa_receipt_number = callback_data.mpesa_receipt_number
-        transaction.transaction_date = callback_data.transaction_date
+        transaction.transaction_date = nairobi_time
 
         db.commit()
 
