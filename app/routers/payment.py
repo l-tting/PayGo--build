@@ -86,3 +86,6 @@ async def stk_push_callback(callback_data: schemas.MpesaCallback,db: Session = D
     return await process_stk_push_callback(callback_data, db)
 
 
+@router.get("/test")
+async def test_payment_route():
+    return {"message": "Payment route is working"}
