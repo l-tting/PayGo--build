@@ -9,11 +9,13 @@ from app.models import Payment
 import os
 from dotenv import load_dotenv
 import pytz
+from requests.auth import HTTPBasicAuth
 
 
 router = APIRouter()
 
 load_dotenv()
+
 
 
 consumer_key = os.getenv("CONSUMER_KEY")
@@ -22,6 +24,12 @@ pass_key = os.getenv("PASS_KEY")
 short_code = os.getenv("SHORT_CODE")
 callback_url = os.getenv("CALLBACK_URL")
 saf_url = os.getenv("SAF_URL")
+
+
+
+url = "https://sandbox.safaricom.co.ke/oauth/v1/generate?grant_type=client_credentials"
+
+
 
 
 
@@ -35,6 +43,8 @@ def format_phone_number(phone: str) -> str:
 
 
 def get_access_token():
+    response = requests.get(url, auth=HTTPBasicAuth(consumer_key, consumer_secret))
+    print(response)
    
     try:
         if not consumer_key or not consumer_secret:

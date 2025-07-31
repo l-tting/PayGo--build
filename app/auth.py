@@ -6,6 +6,8 @@ from datetime import datetime, timedelta, timezone
 from jose import jwt, JWTError,ExpiredSignatureError
 from fastapi import HTTPException,Request,Depends
 
+load_dotenv()
+
 
 JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY")
 JWT_ALGORITHM = os.getenv("JWT_ALGORITHM")
